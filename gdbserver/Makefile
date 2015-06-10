@@ -1,5 +1,5 @@
 PRG := st-util
-OBJS = gdb-remote.o gdb-server.o
+OBJS = gdb-remote.o gdb-server.o FreeRTOS.o
 
 CFLAGS+=-g -Wall -Werror -std=gnu99 -I../src
 LDFLAGS=-L.. -lstlink

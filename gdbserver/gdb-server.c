@@ -26,9 +26,11 @@
 #include "gdb-remote.h"
 #include "gdb-server.h"
 
+#include "FreeRTOS.h"
+
 #define FLASH_BASE 0x08000000
 
-//Allways update the FLASH_PAGE before each use, by calling stlink_calculate_pagesize
+//Always update the FLASH_PAGE before each use, by calling stlink_calculate_pagesize
 #define FLASH_PAGE (sl->flash_pgsz)
 
 stlink_t *connected_stlink = NULL;
@@ -44,6 +46,7 @@ typedef struct _st_state_t {
     int listen_port;
     int persistent;
     int reset;
+    int freertos;
 } st_state_t;
 
 
@@ -72,6 +75,7 @@ int parse_options(int argc, char** argv, st_state_t *st) {
         {"listen_port", required_argument, NULL, 'p'},
         {"multi", optional_argument, NULL, 'm'},
         {"no-reset", optional_argument, NULL, 'n'},
+        {"freertos", optional_argument, NULL, 'f'},
         {0, 0, 0, 0},
     };
     const char * help_str = "%s - usage:\n\n"
@@ -89,6 +93,8 @@ int parse_options(int argc, char** argv, st_state_t *st) {
         "\t\t\tst-util will continue listening for connections after disconnect.\n"
         "  -n, --no-reset\n"
         "\t\t\tDo not reset board on connection.\n"
+        "  -f, --freertos\n"
+        "\t\t\tUse FreeRTOS support\n"
         "\n"
         "The STLINKv2 device to use can be specified in the environment\n"
         "variable STLINK_DEVICE on the format <USB_BUS>:<USB_ADDR>.\n"
@@ -99,7 +105,7 @@ int parse_options(int argc, char** argv, st_state_t *st) {
     int option_index = 0;
     int c;
     int q;
-    while ((c = getopt_long(argc, argv, "hv::s:1p:mn", long_options, &option_index)) != -1) {
+    while ((c = getopt_long(argc, argv, "hv::s:1p:mnf", long_options, &option_index)) != -1) {
         switch (c) {
             case 0:
                 printf("XXXXX Shouldn't really normally come here, only if there's no corresponding option\n");
@@ -144,6 +150,9 @@ int parse_options(int argc, char** argv, st_state_t *st) {
                 break;
             case 'n':
                 st->reset = 0;
+                break;
+            case 'f':
+                st->freertos = 1;
                 break;
         }
     }
@@ -780,9 +789,22 @@ int serve(stlink_t *sl, st_state_t *st) {
 
         switch(packet[0]) {
             case 'q': {
-                if(packet[1] == 'P' || packet[1] == 'C' || packet[1] == 'L') {
+                if(packet[1] == 'P' || packet[1] == 'L' || (st->freertos==0 && packet[1] == 'L')) {
                     reply = strdup("");
                     break;
+                }
+
+                if(st->freertos==1)
+                {
+                    if(strncmp(packet,"qSymbol:",8)==0 ||
+                       strncmp(packet,"qfThreadInfo",12)==0 ||
+                       strncmp(packet,"qsThreadInfo",12)==0 ||
+                       strncmp(packet,"qThreadExtraInfo,",17)==0 ||
+                       strncmp(packet,"qC",2)==0)
+                    {
+                        reply=FreeRTOSPacket(sl, packet);
+                        break;
+                    } 
                 }
 
                 char *separator = strstr(packet, ":"), *params = "";
@@ -1017,12 +1039,17 @@ int serve(stlink_t *sl, st_state_t *st) {
                 break;
 
             case 'g':
-                stlink_read_all_regs(sl, &regp);
+                if(st->freertos==1)
+                    reply=FreeRTOSPacket(sl,packet);
 
-                reply = calloc(8 * 16 + 1, 1);
-                for(int i = 0; i < 16; i++)
-                    sprintf(&reply[i * 8], "%08x", htonl(regp.r[i]));
+                if(reply==NULL)
+                {
+                    stlink_read_all_regs(sl, &regp);
 
+                    reply = calloc(8 * 16 + 1, 1);
+                    for(int i = 0; i < 16; i++)
+                        sprintf(&reply[i * 8], "%08x", htonl(regp.r[i]));
+                }
                 break;
 
             case 'p': {
@@ -1281,6 +1308,15 @@ int serve(stlink_t *sl, st_state_t *st) {
 
                 reply = strdup("OK");
 
+                break;
+            }
+
+            case 'H':
+            case 'T': {
+                if(st->freertos==1)
+                    reply=FreeRTOSPacket(sl, packet);
+                else
+                    reply=strdup("");
                 break;
             }
 

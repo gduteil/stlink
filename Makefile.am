@@ -15,7 +15,7 @@ noinst_LIBRARIES      = libstlink.a
 st_flash_SOURCES = flash/main.c
 st_term_SOURCES = src/st-term.c
 st_info_SOURCES = src/st-info.c
-st_util_SOURCES = gdbserver/gdb-remote.c gdbserver/gdb-remote.h gdbserver/gdb-server.c mingw/mingw.c mingw/mingw.h
+st_util_SOURCES = gdbserver/gdb-remote.c gdbserver/gdb-remote.h gdbserver/gdb-server.c mingw/mingw.c mingw/mingw.h gdbserver/FreeRTOS.c gdbserver/FreeRTOS.h
 
 CFILES = \
 	src/stlink-common.c \

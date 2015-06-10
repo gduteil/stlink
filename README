@@ -68,6 +68,8 @@ There are a few options:
 			st-util will continue listening for connections after disconnect.
   -n, --no-reset
 			Do not reset board on connection.
+  -f, --freertos
+			Use FreeRTOS support.
 
 The STLINKv2 device to use can be specified in the environment
 variable STLINK_DEVICE on the format <USB_BUS>:<USB_ADDR>.
